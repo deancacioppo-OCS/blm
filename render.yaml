@@ -1,7 +1,7 @@
 services:
-  # Backend API Service
+  # PostMONKEE Backend API Service
   - type: web
-    name: blog-monkee-backend
+    name: postmonkee-backend
     runtime: node
     plan: standard
     rootDir: backend
@@ -13,21 +13,21 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: blog-monkee-database
+          name: postmonkee-database
           property: connectionString
 
-  # Frontend Static Site  
+  # PostMONKEE Frontend Static Site  
   - type: web
-    name: blog-monkee-frontend
+    name: postmonkee-frontend
     runtime: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://blm-rmbc.onrender.com
+        value: https://postmonkee-backend.onrender.com
 
 databases:
-  # PostgreSQL Database - Fresh Database
-  - name: blog-monkee-database
-    databaseName: blog_monkee_production
-    user: blog_monkee_user
+  # PostgreSQL Database - Fresh Database for PostMONKEE
+  - name: postmonkee-database
+    databaseName: postmonkee_production
+    user: postmonkee_user

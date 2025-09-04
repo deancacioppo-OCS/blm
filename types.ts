@@ -7,6 +7,7 @@ export interface Client {
   uniqueValueProp: string;
   brandVoice: string;
   contentStrategy: string;
+  ghlLocationId?: string;
   wp: { url: string; username: string; appPassword?: string };
   sitemapUrls?: string[];
   usedTopics?: string[];

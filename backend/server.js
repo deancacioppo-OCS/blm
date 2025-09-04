@@ -22,6 +22,19 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
+// --- Go High Level Configuration ---
+const GHL_CONFIG = {
+  apiKey: process.env.GHL_API_KEY,
+  baseUrl: 'https://services.leadconnectorhq.com',
+  enabled: !!process.env.GHL_API_KEY
+};
+
+console.log(`🎯 Go High Level integration: ${GHL_CONFIG.enabled ? 'ENABLED' : 'DISABLED (missing GHL_API_KEY)'}`);
+
+if (GHL_CONFIG.enabled) {
+  console.log('✅ GHL API configured for PostMONKEE integration');
+}
+
 async function initializeDb() {
   const client = await pool.connect();
   try {
@@ -36,6 +49,7 @@ async function initializeDb() {
         "brandVoice" TEXT,
         "contentStrategy" TEXT,
         "sitemapUrl" TEXT,
+        "ghlLocationId" TEXT,
         wp JSONB,
         "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -60,6 +74,25 @@ async function initializeDb() {
     } catch (alterError) {
       console.log('Note: Could not add sitemapUrl column:', alterError.message);
     }
+
+    // Add ghlLocationId column if it doesn't exist (for GHL integration)
+    try {
+      const ghlColumnCheck = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'clients' AND column_name = 'ghlLocationId';
+      `);
+      
+      if (ghlColumnCheck.rows.length === 0) {
+        await client.query('ALTER TABLE clients ADD COLUMN "ghlLocationId" TEXT;');
+        console.log('✅ Added ghlLocationId column to clients table for Go High Level integration');
+      } else {
+        console.log('✓ ghlLocationId column already exists');
+      }
+    } catch (ghlAlterError) {
+      console.log('Note: Could not add ghlLocationId column:', ghlAlterError.message);
+    }
+
      // Check if sitemap_urls table exists and get its structure
     const tableCheck = await client.query(`
       SELECT column_name, data_type 
@@ -949,6 +982,220 @@ function replaceUrlTemplatesWithReal(content, validLinks) {
     return processedContent;
 }
 
+// ===== GO HIGH LEVEL INTEGRATION FUNCTIONS =====
+
+// Create GHL sub-account for PostMONKEE client
+async function createGHLSubAccount(clientData) {
+    if (!GHL_CONFIG.enabled) {
+        console.log('⚠️ GHL integration disabled - skipping sub-account creation');
+        return null;
+    }
+
+    try {
+        console.log(`🎯 Creating GHL sub-account for client: ${clientData.name}`);
+        
+        const subAccountData = {
+            name: `PostMONKEE - ${clientData.name}`,
+            address: clientData.websiteUrl || 'https://example.com',
+            city: 'N/A',
+            state: 'N/A',
+            country: 'US',
+            postalCode: '00000',
+            website: clientData.websiteUrl || 'https://example.com',
+            timezone: 'America/New_York',
+            firstName: 'PostMONKEE',
+            lastName: 'Admin',
+            email: 'admin@postmonkee.com',
+            phone: '+1234567890'
+        };
+
+        const response = await axios.post(`${GHL_CONFIG.baseUrl}/locations/`, subAccountData, {
+            headers: {
+                'Authorization': `Bearer ${GHL_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+            },
+            timeout: 30000
+        });
+
+        console.log(`✅ Created GHL sub-account for ${clientData.name}: ${response.data.id}`);
+        return response.data;
+
+    } catch (error) {
+        console.error('❌ Failed to create GHL sub-account:', error.response?.data || error.message);
+        throw new Error(`Failed to create GHL sub-account: ${error.response?.data?.message || error.message}`);
+    }
+}
+
+// Post to Google Business Profile via GHL Social Planner
+async function postToGBPviaGHL(ghlLocationId, optimizedContent, clientName) {
+    if (!GHL_CONFIG.enabled) {
+        console.log('⚠️ GHL integration disabled - skipping GBP post');
+        return null;
+    }
+
+    try {
+        console.log(`📱 Posting to Google Business Profile via GHL for: ${clientName}`);
+        
+        const postData = {
+            locationId: ghlLocationId,
+            message: optimizedContent.text,
+            mediaUrl: optimizedContent.imageUrl,
+            postOn: new Date(Date.now() + 300000).toISOString(), // 5 minutes from now
+            socialMediaType: 'GMB' // Google My Business
+        };
+
+        const response = await axios.post(`${GHL_CONFIG.baseUrl}/social-media-posting/`, postData, {
+            headers: {
+                'Authorization': `Bearer ${GHL_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+            },
+            timeout: 30000
+        });
+
+        console.log(`✅ Successfully posted to Google Business Profile for ${clientName}`);
+        return response.data;
+
+    } catch (error) {
+        console.error('❌ Failed to post to Google Business Profile:', error.response?.data || error.message);
+        throw new Error(`Failed to post to GBP: ${error.response?.data?.message || error.message}`);
+    }
+}
+
+// Optimize blog content for Google Business Profile
+function optimizeContentForGBP(blogContent, clientData) {
+    // GBP posts have character limits and need to be engaging
+    const maxLength = 1500;
+    const title = blogContent.title || 'New Blog Post';
+    const summary = blogContent.content ? 
+        blogContent.content.substring(0, 800).replace(/<[^>]*>/g, '') : 
+        'Check out our latest blog post!';
+    
+    // Create engaging GBP post content
+    const callToAction = `\n\n🔗 Read the full article: ${blogContent.url || clientData.websiteUrl}`;
+    const fullText = `${title}\n\n${summary}${callToAction}`;
+    
+    // Trim if too long
+    const finalText = fullText.length > maxLength ? 
+        fullText.substring(0, maxLength - 3) + '...' : 
+        fullText;
+
+    return {
+        text: finalText,
+        imageUrl: blogContent.featuredImage || null,
+        url: blogContent.url || clientData.websiteUrl
+    };
+}
+
+// ===== GO HIGH LEVEL INTEGRATION FUNCTIONS =====
+
+// Create GHL sub-account for PostMONKEE client
+async function createGHLSubAccount(clientData) {
+    if (!GHL_CONFIG.enabled) {
+        console.log('⚠️ GHL integration disabled - skipping sub-account creation');
+        return null;
+    }
+
+    try {
+        console.log(`🎯 Creating GHL sub-account for client: ${clientData.name}`);
+        
+        const subAccountData = {
+            name: `PostMONKEE - ${clientData.name}`,
+            address: clientData.websiteUrl || 'https://example.com',
+            city: 'N/A',
+            state: 'N/A',
+            country: 'US',
+            postalCode: '00000',
+            website: clientData.websiteUrl || 'https://example.com',
+            timezone: 'America/New_York',
+            firstName: 'PostMONKEE',
+            lastName: 'Admin',
+            email: 'admin@postmonkee.com',
+            phone: '+1234567890'
+        };
+
+        const response = await axios.post(`${GHL_CONFIG.baseUrl}/locations/`, subAccountData, {
+            headers: {
+                'Authorization': `Bearer ${GHL_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+            },
+            timeout: 30000
+        });
+
+        console.log(`✅ Created GHL sub-account for ${clientData.name}: ${response.data.id}`);
+        return response.data;
+
+    } catch (error) {
+        console.error('❌ Failed to create GHL sub-account:', error.response?.data || error.message);
+        throw new Error(`Failed to create GHL sub-account: ${error.response?.data?.message || error.message}`);
+    }
+}
+
+// Post to Google Business Profile via GHL Social Planner
+async function postToGBPviaGHL(ghlLocationId, optimizedContent, clientName) {
+    if (!GHL_CONFIG.enabled) {
+        console.log('⚠️ GHL integration disabled - skipping GBP post');
+        return null;
+    }
+
+    try {
+        console.log(`📱 Posting to Google Business Profile via GHL for: ${clientName}`);
+        
+        const postData = {
+            locationId: ghlLocationId,
+            message: optimizedContent.text,
+            mediaUrl: optimizedContent.imageUrl,
+            postOn: new Date(Date.now() + 300000).toISOString(), // 5 minutes from now
+            socialMediaType: 'GMB' // Google My Business
+        };
+
+        const response = await axios.post(`${GHL_CONFIG.baseUrl}/social-media-posting/`, postData, {
+            headers: {
+                'Authorization': `Bearer ${GHL_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+            },
+            timeout: 30000
+        });
+
+        console.log(`✅ Successfully posted to Google Business Profile for ${clientName}`);
+        return response.data;
+
+    } catch (error) {
+        console.error('❌ Failed to post to Google Business Profile:', error.response?.data || error.message);
+        throw new Error(`Failed to post to GBP: ${error.response?.data?.message || error.message}`);
+    }
+}
+
+// Optimize blog content for Google Business Profile
+function optimizeContentForGBP(blogContent, clientData) {
+    // GBP posts have character limits and need to be engaging
+    const maxLength = 1500;
+    const title = blogContent.title || 'New Blog Post';
+    const summary = blogContent.content ? 
+        blogContent.content.substring(0, 800).replace(/<[^>]*>/g, '') : 
+        'Check out our latest blog post!';
+    
+    // Create engaging GBP post content
+    const callToAction = `\n\n🔗 Read the full article: ${blogContent.url || clientData.websiteUrl}`;
+    const fullText = `${title}\n\n${summary}${callToAction}`;
+    
+    // Trim if too long
+    const finalText = fullText.length > maxLength ? 
+        fullText.substring(0, maxLength - 3) + '...' : 
+        fullText;
+
+    return {
+        text: finalText,
+        imageUrl: blogContent.featuredImage || null,
+        url: blogContent.url || clientData.websiteUrl
+    };
+}
+
+
+
 // ENHANCED: Real-time URL validation to prevent 404 errors
 async function validateUrlExists(url) {
     try {
@@ -1681,13 +1928,29 @@ app.post('/api/clients', async (req, res) => {
   const { name, industry, websiteUrl, sitemapUrl, uniqueValueProp, brandVoice, contentStrategy, wp } = req.body;
   const newClient = {
     id: crypto.randomUUID(),
-    name, industry, websiteUrl, sitemapUrl, uniqueValueProp, brandVoice, contentStrategy, wp
+    name, industry, websiteUrl, sitemapUrl, uniqueValueProp, brandVoice, contentStrategy, wp,
+    ghlLocationId: null
   };
+  
   try {
+    // Create GHL sub-account if integration is enabled
+    let ghlSubAccount = null;
+    if (GHL_CONFIG.enabled) {
+      try {
+        console.log(`🎯 Creating GHL sub-account for new client: ${name}`);
+        ghlSubAccount = await createGHLSubAccount(newClient);
+        newClient.ghlLocationId = ghlSubAccount?.id || null;
+        console.log(`✅ GHL sub-account created for ${name}: ${newClient.ghlLocationId}`);
+      } catch (ghlError) {
+        console.error(`⚠️ Failed to create GHL sub-account for ${name}:`, ghlError.message);
+        // Don't fail client creation if GHL sub-account fails
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO clients (id, name, industry, "websiteUrl", "sitemapUrl", "uniqueValueProp", "brandVoice", "contentStrategy", wp) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [newClient.id, newClient.name, newClient.industry, newClient.websiteUrl, newClient.sitemapUrl, newClient.uniqueValueProp, newClient.brandVoice, newClient.contentStrategy, newClient.wp]
+      `INSERT INTO clients (id, name, industry, "websiteUrl", "sitemapUrl", "ghlLocationId", "uniqueValueProp", "brandVoice", "contentStrategy", wp) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [newClient.id, newClient.name, newClient.industry, newClient.websiteUrl, newClient.sitemapUrl, newClient.ghlLocationId, newClient.uniqueValueProp, newClient.brandVoice, newClient.contentStrategy, newClient.wp]
     );
     
     // Crawl website for internal links if websiteUrl is provided
@@ -1702,7 +1965,17 @@ app.post('/api/clients', async (req, res) => {
       }
     }
     
-    res.status(201).json(result.rows[0]);
+    const responseData = result.rows[0];
+    
+    // Add GHL status to response
+    if (GHL_CONFIG.enabled) {
+      responseData.ghlStatus = ghlSubAccount ? 'created' : 'failed';
+      responseData.ghlMessage = ghlSubAccount ? 
+        'Go High Level sub-account created successfully' : 
+        'Go High Level sub-account creation failed';
+    }
+    
+    res.status(201).json(responseData);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -2772,6 +3045,9 @@ app.post('/api/test/crawl', async (req, res) => {
 });
 
 // WordPress Connection Test
+
+
+
 app.post('/api/test/wordpress', async (req, res) => {
     const { clientId } = req.body;
     
@@ -2853,6 +3129,8 @@ app.post('/api/test/wordpress', async (req, res) => {
         });
     }
 });
+
+
 
 // 7. Complete Blog Generation (All-in-One)
 app.post('/api/generate/complete-blog', async (req, res) => {
@@ -3020,7 +3298,7 @@ app.post('/api/generate/complete-blog', async (req, res) => {
               * NEVER create your own URLs or modify templates
               * If no templates are genuinely relevant to your topic, use fewer links or none
               * Quality over quantity - better to have 2 perfect links than 6 poor ones
-
+            
             - CRITICAL: Only reference actual websites that exist and provide genuine information
             - NEVER create fictional URLs or hypothetical websites
             - PRIORITIZE THESE REAL AUTHORITATIVE SOURCES BY INDUSTRY:
@@ -3445,7 +3723,7 @@ app.post('/api/generate/lucky-blog', async (req, res) => {
               * NEVER create your own URLs or modify templates
               * If no templates are genuinely relevant to your topic, use fewer links or none
               * Quality over quantity - better to have 2 perfect links than 6 poor ones
-
+            
             - CRITICAL: Only reference actual websites that exist and provide genuine information
             - NEVER create fictional URLs or hypothetical websites
             - PRIORITIZE THESE REAL AUTHORITATIVE SOURCES BY INDUSTRY:
@@ -3764,6 +4042,23 @@ app.post('/api/generate/lucky-blog', async (req, res) => {
 
         console.log(`🎉 LUCKY SUCCESS: "${plan.title}" created as draft at ${wpPost.link}`);
 
+        // Post to Google Business Profile via GHL
+        try {
+            const blogContent = {
+                title: plan.title,
+                content: contentData.content,
+                url: wpPost.link,
+                featuredImage: featuredImageUrl
+            };
+            
+            const ghlResult = await postToGHL(blogContent, client);
+            if (ghlResult) {
+                console.log(`📱 GHL SUCCESS: Posted to Google Business Profile for ${client.name}`);
+            }
+        } catch (ghlError) {
+            console.log('⚠️ GHL posting failed, but blog was created successfully:', ghlError.message);
+        }
+
         // Return complete success data
         res.json({
             success: true,
@@ -3792,6 +4087,78 @@ app.post('/api/generate/lucky-blog', async (req, res) => {
     }
 });
 
+
+// ===== GO HIGH LEVEL INTEGRATION =====
+
+// Post to Google Business Profile via GHL (clients already have sub-accounts set up)
+async function postToGHL(blogContent, clientData) {
+    if (!GHL_CONFIG.enabled) {
+        console.log('⚠️ GHL integration disabled - skipping GBP post');
+        return null;
+    }
+
+    if (!clientData.ghlLocationId) {
+        console.log('⚠️ No GHL location ID found for client - skipping GBP post');
+        return null;
+    }
+
+    try {
+        console.log(`📱 Posting to Google Business Profile via GHL for: ${clientData.name}`);
+        
+        // Optimize content for Google Business Profile
+        const optimizedContent = optimizeContentForGBP(blogContent, clientData);
+        
+        const postData = {
+            locationId: clientData.ghlLocationId,
+            message: optimizedContent.text,
+            mediaUrl: optimizedContent.imageUrl,
+            postOn: new Date(Date.now() + 300000).toISOString(), // 5 minutes from now
+            socialMediaType: 'GMB' // Google My Business
+        };
+
+        const response = await axios.post(`${GHL_CONFIG.baseUrl}/social-media-posting/`, postData, {
+            headers: {
+                'Authorization': `Bearer ${GHL_CONFIG.apiKey}`,
+                'Content-Type': 'application/json',
+                'Version': '2021-07-28'
+            },
+            timeout: 30000
+        });
+
+        console.log(`✅ Successfully posted to Google Business Profile for ${clientData.name}`);
+        return response.data;
+
+    } catch (error) {
+        console.error('❌ Failed to post to Google Business Profile:', error.response?.data || error.message);
+        // Don't throw error - let blog generation continue even if GHL posting fails
+        return null;
+    }
+}
+
+// Optimize blog content for Google Business Profile
+function optimizeContentForGBP(blogContent, clientData) {
+    // GBP posts have character limits and need to be engaging
+    const maxLength = 1500;
+    const title = blogContent.title || 'New Blog Post';
+    const summary = blogContent.content ? 
+        blogContent.content.substring(0, 800).replace(/<[^>]*>/g, '') : 
+        'Check out our latest blog post!';
+    
+    // Create engaging GBP post content
+    const callToAction = `\n\n🔗 Read the full article: ${blogContent.url || clientData.websiteUrl}`;
+    const fullText = `${title}\n\n${summary}${callToAction}`;
+    
+    // Trim if too long
+    const finalText = fullText.length > maxLength ? 
+        fullText.substring(0, maxLength - 3) + '...' : 
+        fullText;
+
+    return {
+        text: finalText,
+        imageUrl: blogContent.featuredImage || null,
+        url: blogContent.url || clientData.websiteUrl
+    };
+}
 
 // Start server
 app.listen(port, () => {
