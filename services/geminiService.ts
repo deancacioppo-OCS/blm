@@ -1,7 +1,7 @@
 // This service now communicates with the backend, which securely proxies requests to the Gemini API.
 import { Client, BlogPlan } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://postmonkee.onrender.com';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://blm-rmbc.onrender.com';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {

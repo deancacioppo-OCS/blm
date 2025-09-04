@@ -1,33 +1,48 @@
 services:
-  # PostMONKEE Backend API Service
+  # Blog MONKEE Backend API Service
   - type: web
-    name: postmonkee-backend
+    name: blog-monkee-backend
     runtime: node
     plan: standard
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
+      - key: API_KEY
         fromDatabase:
-          name: postmonkee-database
+          name: blog-monkee-database
+          property: connectionString
+      - key: OPENAI_API_KEY
+        fromDatabase:
+          name: blog-monkee-database
+          property: connectionString
+      - key: WORDPRESS_URL
+        fromDatabase:
+          name: blog-monkee-database
+          property: connectionString
+      - key: WORDPRESS_USERNAME
+        fromDatabase:
+          name: blog-monkee-database
+          property: connectionString
+      - key: WORDPRESS_PASSWORD
+        fromDatabase:
+          name: blog-monkee-database
           property: connectionString
 
-  # PostMONKEE Frontend Static Site  
+  # Blog MONKEE Frontend Static Site  
   - type: web
-    name: postmonkee-frontend
+    name: blog-monkee-frontend
     runtime: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://postmonkee-backend.onrender.com
+        value: https://blm-rmbc.onrender.com
 
 databases:
-  # PostgreSQL Database - Fresh Database for PostMONKEE
-  - name: postmonkee-database
-    databaseName: postmonkee_production
-    user: postmonkee_user
+  # PostgreSQL Database - Fresh Database for Blog MONKEE
+  - name: blog-monkee-database
+    databaseName: blog_monkee_production
+    user: blog_monkee_user
+    plan: standard
