@@ -7,8 +7,7 @@
 
 [build.environment]
   # PostMONKEE backend API URL (will be updated after Render deployment)
-  VITE_API_URL = "
-  https://postmonkee.onrender.com"
+  VITE_API_URL = "https://postmonkee.onrender.com"
 
 # Redirect all routes to index.html for SPA
 [[redirects]]
