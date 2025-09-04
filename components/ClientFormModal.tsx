@@ -19,7 +19,6 @@ const ClientFormModal: React.FC<ClientFormModalProps> = ({ client, onClose, onSa
       uniqueValueProp: '',
       brandVoice: '',
       contentStrategy: '',
-      ghlLocationId: '',
       wp: { url: '', username: '' }
     }
   );
@@ -109,20 +108,6 @@ const ClientFormModal: React.FC<ClientFormModalProps> = ({ client, onClose, onSa
             {client?.id && formData.wp?.url && formData.wp?.username && formData.wp?.appPassword && (
                 <WordPressTestButton clientId={client.id} />
             )}
-
-            <h3 className="text-lg font-semibold text-slate-300 pt-4 border-t border-slate-700">Go High Level Integration</h3>
-            <InputField 
-                label="GHL Location ID" 
-                name="ghlLocationId" 
-                value={formData.ghlLocationId || ''} 
-                onChange={handleChange} 
-                placeholder="e.g., 1ALSPGdRmfymipcWOVU1"
-            />
-            <div className="text-sm text-slate-400 p-3 bg-slate-700 rounded-md">
-                <p className="font-medium mb-2">📱 Google Business Profile Posting</p>
-                <p>Enter the Go High Level Location ID for this client to enable automatic Google Business Profile posting. When you use "I'm Feelin' Lucky", the system will automatically post optimized content to their Google Business Profile.</p>
-                <p className="mt-2 text-xs text-cyan-400">💡 Find this in your GHL dashboard under Settings → Locations</p>
-            </div>
 
           <div className="flex justify-end gap-4 pt-4">
             <button type="button" onClick={onClose} className="py-2 px-4 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors">
