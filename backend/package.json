@@ -1,7 +1,7 @@
 {
-  "name": "postmonkee-backend",
+  "name": "blog-monkee-backend",
   "version": "1.0.0",
-  "description": "Backend for PostMONKEE with Go High Level Integration",
+  "description": "Backend for Blog MONKEE - AI-Powered Content Generation Platform",
   "main": "server.js",
   "type": "module",
   "scripts": {

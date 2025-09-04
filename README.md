@@ -1,10 +1,10 @@
-# PostMONKEE - AI-Powered Content Generation with Go High Level Integration
+# Blog MONKEE - AI-Powered Content Generation Platform
 
-**Professional blog creation from topic discovery to WordPress publishing AND Google Business Profile posting - fully automated with human-quality results.**
+**Professional blog creation from topic discovery to WordPress publishing - fully automated with human-quality results.**
 
-## 🚀 What is PostMONKEE?
+## 🚀 What is Blog MONKEE?
 
-PostMONKEE is an enhanced AI-powered content generation platform that automates the entire blog creation process AND extends content distribution to Google Business Profile through Go High Level integration. Using a **tri-AI architecture** with Claude Sonnet 4, Google Gemini 2.5 Flash, and OpenAI DALL-E 3, it creates professional, SEO-optimized blog posts with featured images, contextual linking, and natural human-like writing, then automatically posts optimized versions to Google Business Profile.
+Blog MONKEE is an AI-powered content generation platform that automates the entire blog creation process. Using a **tri-AI architecture** with Claude Sonnet 4, Google Gemini 2.5 Flash, and OpenAI DALL-E 3, it creates professional, SEO-optimized blog posts with featured images, contextual linking, and natural human-like writing.
 
 ### ✨ Latest Features (December 2024)
 
@@ -70,14 +70,6 @@ PostMONKEE is an enhanced AI-powered content generation platform that automates 
 - **Error Resilience** with graceful degradation and detailed logging
 - **Quality Gates** mandatory validation before publishing
 
-#### **📱 Go High Level Integration (NEW)**
-- **Google Business Profile Posting** automatic content distribution to GBP
-- **GHL Location ID Management** easy client setup with location tracking
-- **Content Optimization** blog content automatically formatted for GBP posts
-- **Seamless Workflow** posts to both WordPress and Google Business Profile
-- **Master Account Advantage** leverages unlimited sub-account creation
-- **Real-time Posting** optimized content appears on GBP within 5-10 minutes
-
 ## 🏗️ Technical Architecture
 
 ### **Frontend (Netlify)**
@@ -92,7 +84,6 @@ PostMONKEE is an enhanced AI-powered content generation platform that automates 
 - PostgreSQL with automated migrations and enhanced schema
 - Multi-AI integration with comprehensive error handling
 - WordPress API publishing with media management and Open Graph
-- Go High Level API integration for Google Business Profile posting
 - Image processing with Sharp for photorealistic optimization
 - Real-time URL validation system
 
@@ -102,17 +93,16 @@ PostMONKEE is an enhanced AI-powered content generation platform that automates 
 - **OpenAI DALL-E 3**: Photorealistic image creation with HD quality
 
 ### **Enhanced Database Schema**
-- **Clients**: Company profiles with XML sitemap URLs, GHL Location IDs, and domain validation
+- **Clients**: Company profiles with XML sitemap URLs and domain validation
 - **Sitemap URLs**: Comprehensive URL database with client isolation
 - **Used Topics**: Topic tracking with deduplication per client
 - **Enhanced Security**: Domain validation and cross-contamination prevention
-- **GHL Integration**: Location ID storage for Google Business Profile posting
 
 ## 🚀 Deployment
 
 **Live Application:**
-- **Frontend**: Deployed on Netlify with global CDN and auto-SSL
-- **Backend**: Deployed on Render with auto-scaling and health monitoring
+- **Frontend**: Deployed on Netlify at https://monkee.ai/
+- **Backend**: Deployed on Render at https://blm-rmbc.onrender.com
 - **Database**: PostgreSQL with automated backups and enhanced security
 
 **Git-Powered Deployment:**
@@ -165,26 +155,6 @@ npm run dev
 # Development server on http://localhost:5173
 ```
 
-## 📱 Go High Level Integration Workflow
-
-### **Complete Content Distribution**
-1. **Blog Generation**: AI creates professional blog content with images
-2. **WordPress Publishing**: Content published as draft for review
-3. **GHL Optimization**: Content automatically formatted for Google Business Profile
-4. **GBP Posting**: Optimized content posted to Google Business Profile via GHL
-5. **Real-time Results**: Post appears on GBP within 5-10 minutes
-
-### **User Experience**
-- **Single Click**: "I'm Feelin' Lucky" handles everything automatically
-- **No Learning Curve**: Same workflow, enhanced with GBP posting
-- **Graceful Fallback**: Blog creation continues even if GHL posting fails
-- **Clear Feedback**: Success/failure messages for both WordPress and GBP posting
-
-### **Setup Requirements**
-- **GHL API Key**: Configured in Render environment variables
-- **Client Location IDs**: Added via frontend client form
-- **Master Account**: Leverages unlimited sub-account creation advantage
-
 ## 🎯 Business Impact
 
 ### **Enterprise-Grade Quality Control**
@@ -193,7 +163,6 @@ npm run dev
 - **Photorealistic visuals** for enhanced credibility and engagement
 - **Perfect social sharing** with Open Graph meta tags
 - **Mobile-optimized formatting** for superior user experience
-- **Dual Platform Distribution** WordPress + Google Business Profile posting
 
 ### **Advanced Performance Features**
 - **XML sitemap integration** for complete internal linking coverage
@@ -217,9 +186,6 @@ npm run dev
 - ✅ Photorealistic image generation with HD quality
 - ✅ Open Graph social media integration
 - ✅ Professional content formatting with mobile optimization
-- ✅ Go High Level integration for Google Business Profile posting
-- ✅ GHL Location ID management in client forms
-- ✅ Automatic content optimization for GBP format
 
 ### **Next Phase Development**
 - **Industry-specific prompts** for enhanced content relevance

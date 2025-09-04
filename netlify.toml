@@ -6,8 +6,8 @@
   publish = "dist"
 
 [build.environment]
-  # PostMONKEE backend API URL (will be updated after Render deployment)
-  VITE_API_URL = "https://postmonkee.onrender.com"
+  # Blog MONKEE backend API URL
+  VITE_API_URL = "https://blm-rmbc.onrender.com"
 
 # Redirect all routes to index.html for SPA
 [[redirects]]
