@@ -258,6 +258,8 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         } catch (err) {
           console.error('Series item failed:', err);
           setSeriesStatuses(prev => [...prev, `Failed: ${supportTitle}`]);
+          // Brief backoff then continue to next item
+          await new Promise(res => setTimeout(res, 800));
           continue;
         }
       }

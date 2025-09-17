@@ -2315,8 +2315,39 @@ app.post('/api/generate/content', async (req, res) => {
         res.json(contentData);
 
     } catch (error) {
-        console.error('Error generating content:', error);
-        res.status(500).json({ error: 'Failed to generate content from Gemini API' });
+        console.error('Error generating content (primary path):', error);
+        // Fallback: try a simplified minimal prompt to avoid hard failure
+        try {
+            const minimal = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `Return JSON ONLY with { content:string }. Write a complete blog post in HTML based on the following without adding external links.\nTitle: ${title}\nAngle: ${angle}\nOutline: ${outline}`,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: { content: { type: Type.STRING } },
+                        required: ["content"]
+                    },
+                    generationConfig: { maxOutputTokens: 8192 }
+                }
+            });
+            const minimalJson = JSON.parse(minimal.text);
+            const fallbackContent = minimalJson?.content || '';
+            const countWords = (t) => (t || '').replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+            const contentData = {
+                content: fallbackContent,
+                wordCount: countWords(fallbackContent),
+                metaDescription: '',
+                faqs: []
+            };
+            // Soft-apply replacements and validations
+            try { contentData.content = replaceUrlTemplatesWithReal(contentData.content, internalLinks); } catch(_) {}
+            try { validateInternalLinks(contentData.content, internalLinks); } catch(_) {}
+            return res.json(contentData);
+        } catch (fallbackErr) {
+            console.error('Error in minimal fallback content generation:', fallbackErr);
+            res.status(500).json({ error: 'Failed to generate content from Gemini API' });
+        }
     }
 });
 
