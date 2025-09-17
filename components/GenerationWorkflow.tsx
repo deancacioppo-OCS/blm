@@ -113,8 +113,9 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
     try {
         const result = await api.generateContent(client.id, topic, plan.title, plan.angle, plan.keywords, outline.outline);
         setContent(result);
-        if (Array.isArray(result.faq)) {
-          setFaqs(result.faq);
+        const resultFaqs = (result as any).faqs || (result as any).faq || [];
+        if (Array.isArray(resultFaqs)) {
+          setFaqs(resultFaqs);
         }
     } catch (err) {
         setContentError('Failed to generate content. Please try again.');
@@ -184,6 +185,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
 
       const mainContent = await api.generateContent(client.id, topicResult.topic, mainPlan.title, mainPlan.angle, mainPlan.keywords, mainOutline.outline);
       setContent(mainContent);
+      const mainFaqs = (mainContent as any).faqs || (mainContent as any).faq || [];
 
       const mainHeadings = mainOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
       const mainImages = await api.generateImages(client.id, mainPlan.title, mainHeadings);
@@ -198,7 +200,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         mainImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${mainImages.featuredImage.imageBase64}` : undefined,
         [...(mainPlan.keywords || [])],
         [],
-        { publishNow: true, faqs: Array.isArray((mainContent as any).faq) ? (mainContent as any).faq : [] }
+        { publishNow: true, faqs: Array.isArray(mainFaqs) ? mainFaqs : [] }
       );
       setPublishResult(mainPublish);
 
@@ -229,6 +231,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
           const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
           const sHeadings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
           const sImages = await api.generateImages(client.id, sPlan.title, sHeadings);
+          const sFaqs = (sContent as any).faqs || (sContent as any).faq || [];
 
           const days = intervalDays[i] || 6 * (i + 1);
           const scheduleDate = new Date(Date.UTC(
@@ -249,7 +252,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             sImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${sImages.featuredImage.imageBase64}` : undefined,
             [...sPlan.keywords],
             [],
-            { scheduleAt: scheduleDate.toISOString(), faqs: Array.isArray((sContent as any).faq) ? (sContent as any).faq : [] }
+            { scheduleAt: scheduleDate.toISOString(), faqs: Array.isArray(sFaqs) ? sFaqs : [] }
           );
           setSeriesStatuses(prev => [...prev, `Scheduled: ${sPlan.title} → ${scheduleDate.toUTCString()}`]);
         } catch (err) {
