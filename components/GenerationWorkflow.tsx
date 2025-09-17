@@ -165,44 +165,51 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
     setSeriesRunning(true);
     setSeriesError(null);
     try {
-      // 1) Discover topic, plan, outline, content, images for main
-      await handleDiscoverTopic();
-      await handleCreatePlan();
-      await handleCreateOutline();
-      await handleGenerateContent();
-      await handleGenerateImages();
-      // 2) Publish main immediately
+      // MAIN: topic -> plan -> outline -> content -> images (use local variables to avoid state race)
+      const topicResult = await api.generateTopic(client.id);
+      setTopic(topicResult.topic);
+      setSources(topicResult.sources);
+
+      const mainPlan = await api.generatePlan(client.id, topicResult.topic);
+      setPlan(mainPlan);
+
+      const mainOutline = await api.generateOutline(client.id, topicResult.topic, mainPlan.title, mainPlan.angle, mainPlan.keywords);
+      setOutline(mainOutline);
+
+      const mainContent = await api.generateContent(client.id, topicResult.topic, mainPlan.title, mainPlan.angle, mainPlan.keywords, mainOutline.outline);
+      setContent(mainContent);
+
+      const mainHeadings = mainOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
+      const mainImages = await api.generateImages(client.id, mainPlan.title, mainHeadings);
+      setImages(mainImages);
+
+      // Publish main immediately
       const mainPublish = await api.publishToWordPress(
         client.id,
-        plan!.title,
-        content!.content,
-        content!.metaDescription,
+        mainPlan.title,
+        mainContent.content,
+        mainContent.metaDescription,
         undefined,
-        [...(plan?.keywords || []), `Series: ${plan!.title}`],
+        [...(mainPlan.keywords || []), `Series: ${mainPlan.title}`],
         [],
         { publishNow: true }
       );
       setPublishResult(mainPublish);
 
-      // 3) Generate supporting titles
-      const supporting = await api.generateSupportingTitles(client.id, plan!.title, 3);
+      // Generate supporting titles
+      const supporting = await api.generateSupportingTitles(client.id, mainPlan.title, 3);
       const now = new Date();
 
-      // 4) For each supporting title, generate and schedule
+      // For each supporting title, generate and schedule
       for (let i = 0; i < supporting.titles.length; i++) {
         const supportTitle = supporting.titles[i];
 
-        // Plan
         const sPlan = await api.generatePlan(client.id, supportTitle);
-        // Outline
         const sOutline = await api.generateOutline(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords);
-        // Content (inject main URL link guidance)
         const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
-        // Images (optional)
-        const headings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
-        await api.generateImages(client.id, sPlan.title, headings);
+        const sHeadings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
+        await api.generateImages(client.id, sPlan.title, sHeadings);
 
-        // Compute scheduleAt
         const days = intervalDays[i] || 6 * (i + 1);
         const scheduleDate = new Date(Date.UTC(
           now.getUTCFullYear(),
@@ -214,14 +221,13 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
           0
         ));
 
-        // Publish scheduled with series tag and natural link to main (prompt handles link)
         await api.publishToWordPress(
           client.id,
           sPlan.title,
           sContent.content,
           sContent.metaDescription,
           undefined,
-          [...sPlan.keywords, `Series: ${plan!.title}`],
+          [...sPlan.keywords, `Series: ${mainPlan.title}`],
           [],
           { scheduleAt: scheduleDate.toISOString() }
         );
@@ -231,7 +237,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
     } finally {
       setSeriesRunning(false);
     }
-  }, [client, plan, content, intervalDays, handleDiscoverTopic, handleCreatePlan, handleCreateOutline, handleGenerateContent, handleGenerateImages]);
+  }, [client, intervalDays]);
 
   const handleGenerateCompleteBlog = useCallback(async () => {
     if (!client) return;
