@@ -191,7 +191,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         mainPlan.title,
         mainContent.content,
         mainContent.metaDescription,
-        undefined,
+        mainImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${mainImages.featuredImage.imageBase64}` : undefined,
         [...(mainPlan.keywords || []), `Series: ${mainPlan.title}`],
         [],
         { publishNow: true }
@@ -210,7 +210,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
           const sOutline = await api.generateOutline(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords);
           const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
           const sHeadings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
-          await api.generateImages(client.id, sPlan.title, sHeadings);
+          const sImages = await api.generateImages(client.id, sPlan.title, sHeadings);
 
           const days = intervalDays[i] || 6 * (i + 1);
           const scheduleDate = new Date(Date.UTC(
@@ -228,7 +228,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             sPlan.title,
             sContent.content,
             sContent.metaDescription,
-            undefined,
+            sImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${sImages.featuredImage.imageBase64}` : undefined,
             [...sPlan.keywords, `Series: ${mainPlan.title}`],
             [],
             { scheduleAt: scheduleDate.toISOString() }

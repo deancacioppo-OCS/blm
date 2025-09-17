@@ -70,12 +70,12 @@ export const generateContent = (clientId: string, topic: string, title: string, 
     }).then(res => handleResponse<{ content: string, wordCount: number, metaDescription: string, faq: { question: string, answer: string }[] }>(res));
 };
 
-export const generateImages = (clientId: string, title: string, headings?: string[]): Promise<{ featuredImage: { description: string, placeholder: string }, inBodyImages: { heading: string, description: string, placeholder: string }[] }> => {
+export const generateImages = (clientId: string, title: string, headings?: string[]): Promise<{ featuredImage: { imageBase64: string, altText: string, description: string, specifications: string }, inBodyImages: { heading: string, description: string, placeholder: string }[] }> => {
     return fetch(`${BASE_URL}/api/generate/images`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, title, headings }),
-    }).then(res => handleResponse<{ featuredImage: { description: string, placeholder: string }, inBodyImages: { heading: string, description: string, placeholder: string }[] }>(res));
+    }).then(res => handleResponse<{ featuredImage: { imageBase64: string, altText: string, description: string, specifications: string }, inBodyImages: { heading: string, description: string, placeholder: string }[] }>(res));
 };
 
 export const publishToWordPress = (

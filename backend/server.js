@@ -2091,8 +2091,8 @@ app.post('/api/generate/content', async (req, res) => {
         const contentStyleContext = createContentStyleContext(internalLinks);
         // Create external links context with discovered links (if any)
         const externalLinksContext = topicalExternalLinks.length > 0
-            ? `\n🚀 MANDATORY EXTERNAL LINKS - USE FROM THIS VALIDATED LIST:\n${topicalExternalLinks.map((url, i) => `${i+1}. ${url}`).join('\n')}\n- YOU MUST INCLUDE 2-4 EXTERNAL LINKS FROM THE LIST ABOVE\n- Use natural, descriptive anchor text and open in a new tab\n- Format: <a href="EXACT_URL_FROM_LIST" target="_blank" rel="noopener noreferrer">anchor text</a>`
-            : '\n(No validated external links available. Do not include external links.)';
+            ? `\n🚀 EXTERNAL LINKS (validated):\n${topicalExternalLinks.map((url, i) => `${i+1}. ${url}`).join('\n')}\n- Include 2-4 links from the list above with natural, descriptive anchor text.\n- Format: <a href=\"EXACT_URL_FROM_LIST\" target=\"_blank\" rel=\"noopener noreferrer\">anchor text</a>`
+            : '\nNo validated external links are available. Focus on internal links and quality content; skip external links if none are relevant/available.';
         
         const prompt = `
             You are an expert content writer for a company in the '${client.industry}' industry.
