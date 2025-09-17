@@ -1939,6 +1939,67 @@ app.post('/api/generate/outline', async (req, res) => {
     }
 });
 
+// Generate Supporting Titles based on a main title
+app.post('/api/generate/supporting-titles', async (req, res) => {
+    const { clientId, mainTitle, count = 3 } = req.body;
+    if (!clientId || !mainTitle) {
+        return res.status(400).json({ error: 'clientId and mainTitle are required' });
+    }
+
+    let client;
+    try {
+        const result = await pool.query('SELECT * FROM clients WHERE id = $1', [clientId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Client not found' });
+        }
+        client = result.rows[0];
+    } catch (dbError) {
+        console.error('DB Error fetching client:', dbError);
+        return res.status(500).json({ error: 'Database error' });
+    }
+
+    try {
+        const prompt = `
+            You are an expert content strategist for a company in the '${client.industry}' industry.
+            Company's unique value proposition: '${client.uniqueValueProp}'
+            Company's brand voice: '${client.brandVoice}'
+            Company's content strategy: '${client.contentStrategy}'
+
+            The main article title is: "${mainTitle}".
+
+            Generate ${count} highly relevant supporting article titles that:
+            - Are distinct topics that complement the main article
+            - Avoid duplicating the main article topic
+            - Are suitable as internal-link supporting posts
+            - Are SEO-friendly and specific
+
+            Return JSON with an array 'titles' of strings.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        titles: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    },
+                    required: ["titles"]
+                },
+            },
+        });
+
+        const data = JSON.parse(response.text);
+        const titles = Array.isArray(data.titles) ? data.titles.slice(0, count) : [];
+        return res.json({ titles });
+    } catch (error) {
+        console.error('Error generating supporting titles:', error);
+        return res.status(500).json({ error: 'Failed to generate supporting titles' });
+    }
+});
+
 // 4. Content Generation
 app.post('/api/generate/content', async (req, res) => {
     const { clientId, topic, title, angle, keywords, outline } = req.body;
@@ -2185,7 +2246,7 @@ app.post('/api/generate/images', async (req, res) => {
 
 // 6. WordPress Publishing
 app.post('/api/publish/wordpress', async (req, res) => {
-    const { clientId, title, content, metaDescription, featuredImage, tags, categories } = req.body;
+    const { clientId, title, content, metaDescription, featuredImage, tags, categories, publishNow, scheduleAt, slug } = req.body;
     
     if(!clientId || !title || !content) {
         return res.status(400).json({ error: 'Client ID, title, and content are required' });
@@ -2300,9 +2361,30 @@ app.post('/api/publish/wordpress', async (req, res) => {
             title: title,
             content: enhancedContent,
             excerpt: metaDescription || '',
-            status: 'draft', // Always start as draft for review
+            status: 'draft', // default to draft unless publish or schedule specified
             tags: tagIds // Use tag IDs
         };
+
+        // Apply slug if provided
+        if (slug && typeof slug === 'string' && slug.trim().length > 0) {
+            postData.slug = slug.trim();
+        }
+
+        // Apply publish/schedule logic
+        if (publishNow === true) {
+            postData.status = 'publish';
+        } else if (scheduleAt && typeof scheduleAt === 'string') {
+            try {
+                const scheduleDate = new Date(scheduleAt);
+                if (!isNaN(scheduleDate.getTime())) {
+                    postData.status = 'future';
+                    // Use UTC to avoid timezone drift
+                    postData.date_gmt = scheduleDate.toISOString();
+                }
+            } catch (_) {
+                // ignore invalid scheduleAt; keep as draft
+            }
+        }
         console.log('WordPress post data prepared:', { title, contentLength: content.length, status: postData.status, tagIds });
 
         // Create WordPress post using REST API
