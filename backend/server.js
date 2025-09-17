@@ -2012,6 +2012,29 @@ app.post('/api/generate/content', async (req, res) => {
     
     let client;
     try {
+        function countWords(text) {
+            return (text || '').replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+        }
+        async function continueContent(existingHtml, context) {
+            const continuePrompt = `Continue the blog post to completion without repeating any previous content. Resume naturally from where it left off based on the outline. Return ONLY new HTML to append.\n\nContext (previous ending):\n${existingHtml.slice(-1500)}\n`;
+            const contResponse = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: continuePrompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            content: { type: Type.STRING }
+                        },
+                        required: ["content"]
+                    },
+                    generationConfig: { maxOutputTokens: 8192 }
+                },
+            });
+            const extra = JSON.parse(contResponse.text);
+            return extra?.content || '';
+        }
        const result = await pool.query('SELECT * FROM clients WHERE id = $1', [clientId]);
        if (result.rows.length === 0) {
            return res.status(404).json({ error: 'Client not found' });
@@ -2179,10 +2202,25 @@ app.post('/api/generate/content', async (req, res) => {
                     },
                     required: ["content", "wordCount", "metaDescription", "faqs"]
                 },
+                generationConfig: { maxOutputTokens: 8192 },
             },
         });
         
         const contentData = JSON.parse(response.text);
+        
+        // If content appears short, ask model to continue once or twice
+        let totalWords = typeof contentData.wordCount === 'number' ? contentData.wordCount : countWords(contentData.content);
+        let guard = 0;
+        while (totalWords < 1200 && guard < 2) {
+            const addition = await continueContent(contentData.content, { topic, title, angle });
+            if (addition && addition.length > 0) {
+                contentData.content += "\n\n" + addition;
+                totalWords = countWords(contentData.content);
+            } else {
+                break;
+            }
+            guard++;
+        }
         
         // Apply template-based URL replacement
         console.log('🔧 Applying template-based URL replacement...');
@@ -2494,6 +2532,58 @@ app.post('/api/publish/wordpress', async (req, res) => {
             error: 'Failed to publish to WordPress', 
             details: error.message 
         });
+    }
+});
+
+// Update an existing WordPress post (content/title/excerpt)
+app.post('/api/publish/wordpress/update', async (req, res) => {
+    const { clientId, postId, title, content, metaDescription } = req.body;
+    if (!clientId || !postId) {
+        return res.status(400).json({ error: 'clientId and postId are required' });
+    }
+
+    let client;
+    try {
+        const result = await pool.query('SELECT * FROM clients WHERE id = $1', [clientId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Client not found' });
+        }
+        client = result.rows[0];
+    } catch (dbError) {
+        console.error('DB Error fetching client:', dbError);
+        return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!client.wp || !client.wp.url || !client.wp.username || !client.wp.appPassword) {
+        return res.status(400).json({ error: 'WordPress credentials not configured for this client' });
+    }
+
+    try {
+        const updateUrl = `${client.wp.url.replace(/\/$/, '')}/wp-json/wp/v2/posts/${postId}`;
+        const patchData = {};
+        if (typeof title === 'string' && title.trim()) patchData.title = title.trim();
+        if (typeof content === 'string' && content.trim()) patchData.content = content;
+        if (typeof metaDescription === 'string') patchData.excerpt = metaDescription;
+
+        const wpResponse = await fetch(updateUrl, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${Buffer.from(`${client.wp.username}:${client.wp.appPassword}`).toString('base64')}`
+            },
+            body: JSON.stringify(patchData)
+        });
+
+        if (!wpResponse.ok) {
+            const errorText = await wpResponse.text();
+            return res.status(500).json({ error: 'Failed to update WordPress post', details: errorText });
+        }
+
+        const updated = await wpResponse.json();
+        res.json({ success: true, postId: updated.id, postUrl: updated.link, status: updated.status });
+    } catch (err) {
+        console.error('Update WP post error:', err);
+        res.status(500).json({ error: 'Failed to update WordPress post' });
     }
 });
 

@@ -146,3 +146,15 @@ export const testSitemapParsing = (clientId: string, sitemapUrl: string): Promis
         body: JSON.stringify({ clientId, sitemapUrl }),
     }).then(res => handleResponse<{ success: boolean, message: string, client: any, parsing: any, database: any, advantages: string[], error?: string, details?: string, suggestion?: string }>(res));
 };
+
+export const updateWordPressPost = (
+  clientId: string,
+  postId: number,
+  data: { title?: string; content?: string; metaDescription?: string }
+): Promise<{ success: boolean, postId: number, postUrl: string, status: string }> => {
+  return fetch(`${BASE_URL}/api/publish/wordpress/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, postId, ...data })
+  }).then(res => handleResponse<{ success: boolean, postId: number, postUrl: string, status: string }>(res));
+};

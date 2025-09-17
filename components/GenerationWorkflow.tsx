@@ -198,6 +198,20 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
       );
       setPublishResult(mainPublish);
 
+      // If main content looks short, try to extend and update post once
+      const approxWords = (mainContent.content || '').replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+      if (approxWords < 1200 && mainPublish.postId) {
+        try {
+          const extraContentPrompt = 'Continue the blog post to completion without repeating. Return ONLY new HTML to append.';
+          const cont = await api.generateContent(client.id, mainPlan.title, mainPlan.title, mainPlan.angle, mainPlan.keywords, mainOutline.outline);
+          if (cont?.content && cont.content.length > 200) {
+            await api.updateWordPressPost(client.id, mainPublish.postId, { content: mainContent.content + '\n\n' + cont.content, metaDescription: mainContent.metaDescription });
+          }
+        } catch (e) {
+          console.warn('Extend main post failed (non-critical):', e);
+        }
+      }
+
       // Generate supporting titles
       const supporting = await api.generateSupportingTitles(client.id, mainPlan.title, 3);
       const now = new Date();
