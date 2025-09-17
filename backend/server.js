@@ -2348,6 +2348,7 @@ app.post('/api/publish/wordpress', async (req, res) => {
 
         // Add Open Graph meta tags if featured image is available
         let enhancedContent = content;
+        let featuredImageId = null; // ensure defined in this scope
         if (featuredImageId) {
             try {
                 const mediaResponse = await fetch(`${client.wp.url.replace(/\/$/, '')}/wp-json/wp/v2/media/${featuredImageId}`, {
@@ -2403,6 +2404,23 @@ app.post('/api/publish/wordpress', async (req, res) => {
                 }
             } catch (_) {
                 // ignore invalid scheduleAt; keep as draft
+            }
+        }
+
+        // Attach featured media if present in request
+        if (featuredImage && typeof featuredImage === 'string' && featuredImage.startsWith('data:image')) {
+            try {
+                const base64 = featuredImage.split(',')[1] || '';
+                if (base64) {
+                    const filename = `featured-${title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}.jpg`;
+                    const uploaded = await uploadImageToWordPress(base64, filename, title, client);
+                    if (uploaded && uploaded.id) {
+                        postData.featured_media = uploaded.id;
+                        console.log(`🖼️ Attached featured image via request payload: ID=${uploaded.id}`);
+                    }
+                }
+            } catch (imgErr) {
+                console.warn('⚠️ Failed to upload provided featured image, continuing without it:', imgErr.message);
             }
         }
         console.log('WordPress post data prepared:', { title, contentLength: content.length, status: postData.status, tagIds });
