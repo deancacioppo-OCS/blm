@@ -78,12 +78,33 @@ export const generateImages = (clientId: string, title: string, headings?: strin
     }).then(res => handleResponse<{ featuredImage: { description: string, placeholder: string }, inBodyImages: { heading: string, description: string, placeholder: string }[] }>(res));
 };
 
-export const publishToWordPress = (clientId: string, title: string, content: string, metaDescription?: string, featuredImage?: string, tags?: string[], categories?: string[]): Promise<{ success: boolean, postId: number, postUrl: string, editUrl: string, status: string, message: string }> => {
+export const publishToWordPress = (
+  clientId: string,
+  title: string,
+  content: string,
+  metaDescription?: string,
+  featuredImage?: string,
+  tags?: string[],
+  categories?: string[],
+  options?: { publishNow?: boolean; scheduleAt?: string; slug?: string }
+): Promise<{ success: boolean, postId: number, postUrl: string, editUrl: string, status: string, message: string }> => {
     return fetch(`${BASE_URL}/api/publish/wordpress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, title, content, metaDescription, featuredImage, tags, categories }),
+        body: JSON.stringify({ clientId, title, content, metaDescription, featuredImage, tags, categories, ...(options || {}) }),
     }).then(res => handleResponse<{ success: boolean, postId: number, postUrl: string, editUrl: string, status: string, message: string }>(res));
+};
+
+export const generateSupportingTitles = (
+  clientId: string,
+  mainTitle: string,
+  count: number = 3
+): Promise<{ titles: string[] }> => {
+  return fetch(`${BASE_URL}/api/generate/supporting-titles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, mainTitle, count })
+  }).then(res => handleResponse<{ titles: string[] }>(res));
 };
 
 export const generateCompleteBlog = (clientId: string): Promise<{ topic: string, sources: any[], plan: BlogPlan, content: { content: string, wordCount: number, metaDescription: string, faq: { question: string, answer: string }[] }, readyToPublish: boolean }> => {

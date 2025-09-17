@@ -16,6 +16,12 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
   const [images, setImages] = useState<BlogImages | null>(null);
   const [publishResult, setPublishResult] = useState<WordPressPublishResult | null>(null);
   
+  // Series mode state
+  const [seriesMode, setSeriesMode] = useState<boolean>(false);
+  const [intervalDays, setIntervalDays] = useState<number[]>([6, 12, 18]);
+  const [seriesRunning, setSeriesRunning] = useState<boolean>(false);
+  const [seriesError, setSeriesError] = useState<string | null>(null);
+  
   const [topicLoading, setTopicLoading] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
   const [outlineLoading, setOutlineLoading] = useState(false);
@@ -142,7 +148,8 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             content.metaDescription,
             undefined, // featuredImage - would be base64 if we had actual images
             plan.keywords, // use keywords as tags
-            [] // categories - could be derived from client industry
+            [], // categories - could be derived from client industry
+            { publishNow: true }
         );
         setPublishResult(result);
     } catch (err) {
@@ -151,6 +158,80 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         setPublishLoading(false);
     }
   }, [client, plan, content]);
+
+  // Orchestrate Series of 4: main now + 3 scheduled using user-provided intervals
+  const handleSeriesOfFour = useCallback(async () => {
+    if (!client) return;
+    setSeriesRunning(true);
+    setSeriesError(null);
+    try {
+      // 1) Discover topic, plan, outline, content, images for main
+      await handleDiscoverTopic();
+      await handleCreatePlan();
+      await handleCreateOutline();
+      await handleGenerateContent();
+      await handleGenerateImages();
+      // 2) Publish main immediately
+      const mainPublish = await api.publishToWordPress(
+        client.id,
+        plan!.title,
+        content!.content,
+        content!.metaDescription,
+        undefined,
+        [...(plan?.keywords || []), `Series: ${plan!.title}`],
+        [],
+        { publishNow: true }
+      );
+      setPublishResult(mainPublish);
+
+      // 3) Generate supporting titles
+      const supporting = await api.generateSupportingTitles(client.id, plan!.title, 3);
+      const now = new Date();
+
+      // 4) For each supporting title, generate and schedule
+      for (let i = 0; i < supporting.titles.length; i++) {
+        const supportTitle = supporting.titles[i];
+
+        // Plan
+        const sPlan = await api.generatePlan(client.id, supportTitle);
+        // Outline
+        const sOutline = await api.generateOutline(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords);
+        // Content (inject main URL link guidance)
+        const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
+        // Images (optional)
+        const headings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
+        await api.generateImages(client.id, sPlan.title, headings);
+
+        // Compute scheduleAt
+        const days = intervalDays[i] || 6 * (i + 1);
+        const scheduleDate = new Date(Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate() + days,
+          now.getUTCHours(),
+          now.getUTCMinutes(),
+          0,
+          0
+        ));
+
+        // Publish scheduled with series tag and natural link to main (prompt handles link)
+        await api.publishToWordPress(
+          client.id,
+          sPlan.title,
+          sContent.content,
+          sContent.metaDescription,
+          undefined,
+          [...sPlan.keywords, `Series: ${plan!.title}`],
+          [],
+          { scheduleAt: scheduleDate.toISOString() }
+        );
+      }
+    } catch (e) {
+      setSeriesError('Failed to create series. Please review inputs and try again.');
+    } finally {
+      setSeriesRunning(false);
+    }
+  }, [client, plan, content, intervalDays, handleDiscoverTopic, handleCreatePlan, handleCreateOutline, handleGenerateContent, handleGenerateImages]);
 
   const handleGenerateCompleteBlog = useCallback(async () => {
     if (!client) return;
@@ -212,6 +293,47 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             </button>
           </div>
           {completeBlogError && <p className="text-red-400 text-sm mt-2">{completeBlogError}</p>}
+        </div>
+
+        {/* Series of 4 Controls */}
+        <div className="p-4 bg-gradient-to-r from-blue-900/20 to-indigo-900/20 rounded-lg border border-blue-700/30">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-medium text-blue-300">Series of 4</h3>
+              <p className="text-sm text-slate-400">Publish main now and schedule 3 supporting posts.</p>
+              <div className="mt-3 flex items-center gap-2 text-sm text-slate-300">
+                <label>Intervals (days):</label>
+                {intervalDays.map((d, idx) => (
+                  <input
+                    key={idx}
+                    type="number"
+                    min={1}
+                    value={d}
+                    onChange={e => {
+                      const next = [...intervalDays];
+                      next[idx] = Number(e.target.value);
+                      setIntervalDays(next);
+                    }}
+                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1"
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-slate-300 text-sm">
+                <input type="checkbox" checked={seriesMode} onChange={e => setSeriesMode(e.target.checked)} /> Enable
+              </label>
+              <button
+                onClick={handleSeriesOfFour}
+                disabled={!seriesMode || seriesRunning}
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg"
+              >
+                {seriesRunning && <Spinner small />}
+                {seriesRunning ? 'Scheduling…' : 'Create Series of 4'}
+              </button>
+            </div>
+          </div>
+          {seriesError && <p className="text-red-400 text-sm mt-2">{seriesError}</p>}
         </div>
 
         {/* Debug Info - Show current state */}
