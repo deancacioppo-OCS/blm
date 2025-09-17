@@ -2210,7 +2210,50 @@ app.post('/api/generate/content', async (req, res) => {
             },
         });
         
-        let contentData = JSON.parse(response.text);
+        // Safely parse model output; fall back if malformed
+        let contentData = null;
+        try {
+            contentData = JSON.parse(response.text);
+        } catch (parseErr) {
+            console.error('❌ Gemini JSON parse failed (content):', {
+                error: parseErr.message,
+                preview: (typeof response.text === 'string') ? response.text.slice(0, 500) : '[no text]'
+            });
+            // Fallback: request minimal JSON structure
+            const fallback = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `Return JSON ONLY with fields { content: string, wordCount: number, metaDescription: string, faqs: [{question:string,answer:string}] }. Write the full blog content in HTML based on:\nTopic: ${topic}\nTitle: ${title}\nAngle: ${angle}\nOutline: ${outline}\n` ,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            content: { type: Type.STRING },
+                            wordCount: { type: Type.NUMBER },
+                            metaDescription: { type: Type.STRING },
+                            faqs: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } }
+                                }
+                            }
+                        },
+                        required: ["content", "wordCount", "metaDescription"]
+                    },
+                    generationConfig: { maxOutputTokens: 8192, temperature: 0.6 }
+                }
+            });
+            try {
+                contentData = JSON.parse(fallback.text);
+            } catch (fallbackErr) {
+                console.error('❌ Fallback JSON parse failed:', {
+                    error: fallbackErr.message,
+                    preview: (typeof fallback.text === 'string') ? fallback.text.slice(0, 500) : '[no text]'
+                });
+                throw new Error('model_output_invalid');
+            }
+        }
         if (!contentData?.content || contentData.content.length < 2000) {
             // Retry once with a simplified, content-only follow-up to reduce 500s
             const followup = await ai.models.generateContent({
@@ -2249,12 +2292,20 @@ app.post('/api/generate/content', async (req, res) => {
             guard++;
         }
         
-        // Apply template-based URL replacement
-        console.log('🔧 Applying template-based URL replacement...');
-        contentData.content = replaceUrlTemplatesWithReal(contentData.content, internalLinks);
+        // Apply template-based URL replacement (non-fatal)
+        try {
+            console.log('🔧 Applying template-based URL replacement...');
+            contentData.content = replaceUrlTemplatesWithReal(contentData.content, internalLinks);
+        } catch (replErr) {
+            console.warn('⚠️ URL template replacement failed (non-fatal):', replErr.message);
+        }
         
-        // Validate internal links in generated content
-        validateInternalLinks(contentData.content, internalLinks);
+        // Validate internal links in generated content (non-fatal warnings)
+        try {
+            validateInternalLinks(contentData.content, internalLinks);
+        } catch (intErr) {
+            console.warn('⚠️ Internal link validation warning:', intErr.message);
+        }
         
         // Validate external links in generated content only if we had a validated list available
         if (topicalExternalLinks.length > 0) {
