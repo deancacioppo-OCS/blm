@@ -86,7 +86,7 @@ export const publishToWordPress = (
   featuredImage?: string,
   tags?: string[],
   categories?: string[],
-  options?: { publishNow?: boolean; scheduleAt?: string; slug?: string }
+  options?: { publishNow?: boolean; scheduleAt?: string; slug?: string; faqs?: { question: string; answer: string }[] }
 ): Promise<{ success: boolean, postId: number, postUrl: string, editUrl: string, status: string, message: string }> => {
     return fetch(`${BASE_URL}/api/publish/wordpress`, {
         method: 'POST',

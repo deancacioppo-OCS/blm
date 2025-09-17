@@ -15,6 +15,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
   const [content, setContent] = useState<BlogContent | null>(null);
   const [images, setImages] = useState<BlogImages | null>(null);
   const [publishResult, setPublishResult] = useState<WordPressPublishResult | null>(null);
+  const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
   
   // Series mode state
   const [seriesMode, setSeriesMode] = useState<boolean>(false);
@@ -112,6 +113,9 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
     try {
         const result = await api.generateContent(client.id, topic, plan.title, plan.angle, plan.keywords, outline.outline);
         setContent(result);
+        if (Array.isArray(result.faq)) {
+          setFaqs(result.faq);
+        }
     } catch (err) {
         setContentError('Failed to generate content. Please try again.');
     } finally {
@@ -194,7 +198,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         mainImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${mainImages.featuredImage.imageBase64}` : undefined,
         [...(mainPlan.keywords || []), `Series: ${mainPlan.title}`],
         [],
-        { publishNow: true }
+        { publishNow: true, faqs }
       );
       setPublishResult(mainPublish);
 
@@ -245,7 +249,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             sImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${sImages.featuredImage.imageBase64}` : undefined,
             [...sPlan.keywords, `Series: ${mainPlan.title}`],
             [],
-            { scheduleAt: scheduleDate.toISOString() }
+            { scheduleAt: scheduleDate.toISOString(), faqs }
           );
           setSeriesStatuses(prev => [...prev, `Scheduled: ${sPlan.title} → ${scheduleDate.toUTCString()}`]);
         } catch (err) {

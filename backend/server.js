@@ -2417,6 +2417,17 @@ app.post('/api/publish/wordpress', async (req, res) => {
             }
         }
 
+        // Append FAQ section with JSON-LD schema if provided
+        if (Array.isArray(req.body.faqs) && req.body.faqs.length > 0) {
+            try {
+                const faqHTML = generateFAQHTML(req.body.faqs);
+                enhancedContent = enhancedContent + "\n\n" + faqHTML;
+                console.log(`🧩 Appended FAQ section with ${req.body.faqs.length} items`);
+            } catch (faqErr) {
+                console.warn('⚠️ Failed to append FAQ section:', faqErr.message);
+            }
+        }
+
         // Prepare post data
         const postData = {
             title: title,
