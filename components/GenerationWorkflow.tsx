@@ -196,9 +196,9 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
         mainContent.content,
         mainContent.metaDescription,
         mainImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${mainImages.featuredImage.imageBase64}` : undefined,
-        [...(mainPlan.keywords || []), `Series: ${mainPlan.title}`],
+        [...(mainPlan.keywords || [])],
         [],
-        { publishNow: true, faqs }
+        { publishNow: true, faqs: Array.isArray((mainContent as any).faq) ? (mainContent as any).faq : [] }
       );
       setPublishResult(mainPublish);
 
@@ -247,9 +247,9 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
             sContent.content,
             sContent.metaDescription,
             sImages?.featuredImage?.imageBase64 ? `data:image/jpeg;base64,${sImages.featuredImage.imageBase64}` : undefined,
-            [...sPlan.keywords, `Series: ${mainPlan.title}`],
+            [...sPlan.keywords],
             [],
-            { scheduleAt: scheduleDate.toISOString(), faqs }
+            { scheduleAt: scheduleDate.toISOString(), faqs: Array.isArray((sContent as any).faq) ? (sContent as any).faq : [] }
           );
           setSeriesStatuses(prev => [...prev, `Scheduled: ${sPlan.title} → ${scheduleDate.toUTCString()}`]);
         } catch (err) {
