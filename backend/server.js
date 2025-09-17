@@ -1865,6 +1865,10 @@ app.post('/api/generate/plan', async (req, res) => {
                     },
                     required: ["title", "angle", "keywords"]
                 },
+                generationConfig: {
+                    maxOutputTokens: 8192,
+                    temperature: 0.6
+                }
             },
         });
         
@@ -2206,7 +2210,30 @@ app.post('/api/generate/content', async (req, res) => {
             },
         });
         
-        const contentData = JSON.parse(response.text);
+        let contentData = JSON.parse(response.text);
+        if (!contentData?.content || contentData.content.length < 2000) {
+            // Retry once with a simplified, content-only follow-up to reduce 500s
+            const followup = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `Write the REMAINING sections of the blog post in HTML, continuing from the outline without repeating. Return JSON { content: string } only.\n\nOutline:\n${outline}`,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: { content: { type: Type.STRING } },
+                        required: ["content"]
+                    },
+                    generationConfig: { maxOutputTokens: 8192, temperature: 0.6 }
+                }
+            });
+            try {
+                const extra = JSON.parse(followup.text);
+                if (extra?.content) {
+                    contentData.content = (contentData.content || '') + "\n\n" + extra.content;
+                    contentData.wordCount = (contentData.wordCount || 0) + extra.content.split(/\s+/).length;
+                }
+            } catch (_) {}
+        }
         
         // If content appears short, ask model to continue once or twice
         let totalWords = typeof contentData.wordCount === 'number' ? contentData.wordCount : countWords(contentData.content);
