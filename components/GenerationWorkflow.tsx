@@ -21,6 +21,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
   const [intervalDays, setIntervalDays] = useState<number[]>([6, 12, 18]);
   const [seriesRunning, setSeriesRunning] = useState<boolean>(false);
   const [seriesError, setSeriesError] = useState<string | null>(null);
+  const [seriesStatuses, setSeriesStatuses] = useState<string[]>([]);
   
   const [topicLoading, setTopicLoading] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
@@ -164,6 +165,7 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
     if (!client) return;
     setSeriesRunning(true);
     setSeriesError(null);
+    setSeriesStatuses([]);
     try {
       // MAIN: topic -> plan -> outline -> content -> images (use local variables to avoid state race)
       const topicResult = await api.generateTopic(client.id);
@@ -200,37 +202,43 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
       const supporting = await api.generateSupportingTitles(client.id, mainPlan.title, 3);
       const now = new Date();
 
-      // For each supporting title, generate and schedule
+      // For each supporting title, generate and schedule (continue on error)
       for (let i = 0; i < supporting.titles.length; i++) {
         const supportTitle = supporting.titles[i];
+        try {
+          const sPlan = await api.generatePlan(client.id, supportTitle);
+          const sOutline = await api.generateOutline(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords);
+          const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
+          const sHeadings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
+          await api.generateImages(client.id, sPlan.title, sHeadings);
 
-        const sPlan = await api.generatePlan(client.id, supportTitle);
-        const sOutline = await api.generateOutline(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords);
-        const sContent = await api.generateContent(client.id, supportTitle, sPlan.title, sPlan.angle, sPlan.keywords, sOutline.outline);
-        const sHeadings = sOutline.outline.match(/^#+\s+(.+)$/gm)?.map(h => h.replace(/^#+\s+/, '')) || [];
-        await api.generateImages(client.id, sPlan.title, sHeadings);
+          const days = intervalDays[i] || 6 * (i + 1);
+          const scheduleDate = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() + days,
+            now.getUTCHours(),
+            now.getUTCMinutes(),
+            0,
+            0
+          ));
 
-        const days = intervalDays[i] || 6 * (i + 1);
-        const scheduleDate = new Date(Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate() + days,
-          now.getUTCHours(),
-          now.getUTCMinutes(),
-          0,
-          0
-        ));
-
-        await api.publishToWordPress(
-          client.id,
-          sPlan.title,
-          sContent.content,
-          sContent.metaDescription,
-          undefined,
-          [...sPlan.keywords, `Series: ${mainPlan.title}`],
-          [],
-          { scheduleAt: scheduleDate.toISOString() }
-        );
+          await api.publishToWordPress(
+            client.id,
+            sPlan.title,
+            sContent.content,
+            sContent.metaDescription,
+            undefined,
+            [...sPlan.keywords, `Series: ${mainPlan.title}`],
+            [],
+            { scheduleAt: scheduleDate.toISOString() }
+          );
+          setSeriesStatuses(prev => [...prev, `Scheduled: ${sPlan.title} → ${scheduleDate.toUTCString()}`]);
+        } catch (err) {
+          console.error('Series item failed:', err);
+          setSeriesStatuses(prev => [...prev, `Failed: ${supportTitle}`]);
+          continue;
+        }
       }
     } catch (e) {
       setSeriesError('Failed to create series. Please review inputs and try again.');
@@ -339,6 +347,13 @@ const GenerationWorkflow: React.FC<GenerationWorkflowProps> = ({ client }) => {
               </button>
             </div>
           </div>
+          {seriesStatuses.length > 0 && (
+            <div className="mt-3 text-xs text-slate-300 space-y-1">
+              {seriesStatuses.map((s, i) => (
+                <div key={i}>• {s}</div>
+              ))}
+            </div>
+          )}
           {seriesError && <p className="text-red-400 text-sm mt-2">{seriesError}</p>}
         </div>
 
