@@ -227,7 +227,9 @@ app.use(cors({
       ]
     : ['http://localhost:5173', 'http://localhost:3000']
 }));
-app.use(express.json());
+// Increase body size limit to allow base64 images for featured media
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Initialize Gemini AI
 if (!process.env.API_KEY) {
