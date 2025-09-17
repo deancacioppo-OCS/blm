@@ -2022,6 +2022,8 @@ app.post('/api/generate/content', async (req, res) => {
 
     // Get available internal links from sitemap
     let internalLinks = [];
+    // Also try to get validated topical external links discovered during topic generation
+    let topicalExternalLinks = [];
     try {
         const linkResult = await pool.query(
             'SELECT url, title, description, category, keywords FROM sitemap_urls WHERE client_id = $1 AND title IS NOT NULL ORDER BY "createdAt" DESC LIMIT 20',
@@ -2050,6 +2052,17 @@ app.post('/api/generate/content', async (req, res) => {
                 console.log(`Using ${internalLinks.length} basic internal links`);
             }
         }
+        // Fetch validated topical external links for this topic (if present)
+        try {
+            const topicalLinksResult = await pool.query(
+                'SELECT url FROM topic_external_links WHERE client_id = $1 AND topic = $2 AND is_validated = TRUE ORDER BY authority_score DESC LIMIT 8',
+                [clientId, topic]
+            );
+            topicalExternalLinks = topicalLinksResult.rows.map(row => row.url);
+            console.log(`Found ${topicalExternalLinks.length} topical external links for content generation`);
+        } catch (topicalErr) {
+            console.log('Failed to fetch topical external links:', topicalErr.message);
+        }
     } catch (linkError) {
         console.log('Failed to fetch internal links:', linkError.message);
     }
@@ -2076,6 +2089,10 @@ app.post('/api/generate/content', async (req, res) => {
             : '\nNo internal links available yet - do not create any internal links.';
 
         const contentStyleContext = createContentStyleContext(internalLinks);
+        // Create external links context with discovered links (if any)
+        const externalLinksContext = topicalExternalLinks.length > 0
+            ? `\n🚀 MANDATORY EXTERNAL LINKS - USE FROM THIS VALIDATED LIST:\n${topicalExternalLinks.map((url, i) => `${i+1}. ${url}`).join('\n')}\n- YOU MUST INCLUDE 2-4 EXTERNAL LINKS FROM THE LIST ABOVE\n- Use natural, descriptive anchor text and open in a new tab\n- Format: <a href="EXACT_URL_FROM_LIST" target="_blank" rel="noopener noreferrer">anchor text</a>`
+            : '\n(No validated external links available. Do not include external links.)';
         
         const prompt = `
             You are an expert content writer for a company in the '${client.industry}' industry.
@@ -2091,6 +2108,7 @@ app.post('/api/generate/content', async (req, res) => {
             Target Keywords: ${keywords.join(', ')}
             Outline: ${outline}
             ${internalLinksContext}
+            ${externalLinksContext}
             
             Requirements:
             - Write in HTML format with proper headings (h1, h2, h3)
@@ -2171,8 +2189,10 @@ app.post('/api/generate/content', async (req, res) => {
         // Validate internal links in generated content
         validateInternalLinks(contentData.content, internalLinks);
         
-        // Validate external links in generated content
-        await validateExternalLinks(contentData.content);
+        // Validate external links in generated content only if we had a validated list available
+        if (topicalExternalLinks.length > 0) {
+            await validateExternalLinks(contentData.content);
+        }
         
         res.json(contentData);
 
